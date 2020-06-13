@@ -1,0 +1,82 @@
+#!/usr/bin/env python
+# Author: Andreas Spiess
+# http://www.sensorsiot.org/transferFiles/Pi_Zero_MQTT_Broker/fanShutdownPWM.py
+# https://www.sensorsiot.org/variable-speed-cooling-fan-for-raspberry-pi-using-pwm-video138/
+# https://www.sensorsiot.org/pimp-my-raspberry-pi-3/
+#
+# was python3 - changed to python (2)
+
+import os
+import time
+from time import sleep
+import signal
+import sys
+import RPi.GPIO as GPIO
+import argparse
+
+parser = argparse.ArgumentParser(description='Fan Daemon')
+
+parser.add_argument('-p', '--pin', type=int, help='The pin number for the fan', default=23)
+parser.add_argument('-t', '--temp', type=int, help='The desired temperature (C)', default=45)
+parser.add_argument('--debug', action='store_true', help='Print debug information')
+
+args = parser.parse_args()
+
+fanPin = args.pin
+desiredTemp = args.temp
+debug=args.debug
+
+fanSpeed=100
+sum=0
+pTemp=15
+iTemp=0.4
+
+if debug:
+    print("fan pin is {0}, desired temperature is {1}".format(fanPin,desiredTemp))
+
+def getCPUtemperature():
+    res = os.popen('vcgencmd measure_temp').readline()
+    temp =(res.replace("temp=","").replace("'C\n",""))
+    #if debug:
+    #    print("temp is {0}".format(temp))
+    return temp
+def fanOFF():
+    myPWM.ChangeDutyCycle(0)   # switch fan off
+    return()
+def handleFan():
+    global fanSpeed,sum
+    actualTemp = float(getCPUtemperature())
+    diff=actualTemp-desiredTemp
+    sum=sum+diff
+    pDiff=diff*pTemp
+    iDiff=sum*iTemp
+    fanSpeed=pDiff +iDiff
+    if fanSpeed>100:
+        fanSpeed=100
+    if fanSpeed<15:
+        fanSpeed=0
+    if sum>100:
+        sum=100
+    if sum<-100:
+        sum=-100
+    if debug:
+        print("actualTemp %4.2f TempDiff %4.2f pDiff %4.2f iDiff %4.2f fanSpeed %5d" % (actualTemp,diff,pDiff,iDiff,fanSpeed))
+    myPWM.ChangeDutyCycle(fanSpeed)
+    return()
+def setPin(mode): # A little redundant function but useful if you want to add logging
+    GPIO.output(fanPin, mode)
+    return()
+try:
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(fanPin, GPIO.OUT)
+    myPWM=GPIO.PWM(fanPin,50)
+    myPWM.start(50)
+    GPIO.setwarnings(False)
+    fanOFF()
+    while True:
+        handleFan()
+        sleep(1) # Read the temperature every 5 sec, increase or decrease this limit if you want 
+except KeyboardInterrupt: # trap a CTRL+C keyboard interrupt 
+    fanOFF()
+    GPIO.cleanup() # resets all GPIO ports used by this program

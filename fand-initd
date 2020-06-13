@@ -1,0 +1,95 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          fand
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Fan speed controller
+# Description:       Daemon to controll the speed of the fan
+### END INIT INFO
+
+# install using: sudo update-rc.d fand defaults
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+DESC="fan controller"
+# some call this DAEMON_NAME
+NAME="fand"
+DAEMON_USER=root
+DAEMON="/usr/local/sbin/$NAME"
+DAEMON_ARGS=""
+# the startup script name (this file)
+SCRIPTNAME=/etc/init.d/$NAME
+PIDFILE=/var/run/$NAME.pid
+
+# Gracefully exit if the package has been removed.
+test -x $DAEMON || exit 0
+
+. /lib/lsb/init-functions
+
+# Include fan-daemon defaults if available.
+test -f /etc/default/$NAME && . /etc/default/$NAME
+
+DISABLE_TAG="/var/run/fan/disable"
+
+d_start() {
+#    $DAEMON -c || $DAEMON -D
+	log_daemon_msg "Starting system $DAEMON_NAME daemon"
+	start-stop-daemon --start --background --pidfile $PIDFILE --make-pidfile --user $DAEMON_USER --startas $DAEMON -- $DAEMON_ARGS
+	log_end_msg $?
+}
+
+d_stop() {
+#    $DAEMON -c && $DAEMON -k
+	log_daemon_msg "Stopping system $DAEMON_NAME daemon"
+	start-stop-daemon --stop  --pidfile $PIDFILE
+	log_end_msg $?
+}
+
+d_reload() {
+#    $DAEMON -c && $DAEMON -r
+    d_stop && d_start
+    log_end_msg $?
+}
+
+d_status() {
+#    $DAEMON -c && { echo "$DESC is running"; exit 0; } || { echo "$DESC is not running"; exit 3; }
+	status_of_proc "$NAME" "$DAEMON" && exit 0 || exit $?
+}
+
+case "$1" in
+    start)
+        log_daemon_msg "Starting $DESC" "$NAME"
+        d_start
+        log_end_msg $?
+        ;;
+    stop)
+        log_daemon_msg "Stopping $DESC" "$NAME"
+        d_stop
+        log_end_msg $?
+        ;;
+    reload|force-reload)
+        log_daemon_msg "Reloading services for $DESC" "$NAME"
+        d_reload
+        log_end_msg $?
+        ;;
+    restart)
+        log_daemon_msg "Restarting $DESC" "$NAME"
+        d_stop
+        if [ "$?" -eq 0 ]; then
+                d_start
+                log_end_msg $?
+        else
+                log_end_msg 1
+        fi
+        ;;
+    status)
+        d_status
+        ;;
+    *)
+        echo "Usage: $SCRIPTNAME {start|stop|restart|force-reload|reload|status}" >&2
+        exit 3
+        ;;
+esac
+
+exit 0
